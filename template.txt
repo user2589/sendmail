@@ -1,0 +1,7 @@
+Dear {name},
+
+We would like to inform you that as of {date} your account
+balance is ${balance}.
+
+Sincerely,
+your support team X.
