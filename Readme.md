@@ -3,36 +3,35 @@ Sendmail
 
 This is a small automation console script. It is written to automate small mailing list from generated CSV file.
 
+**Note**: it was tested only on Linux. To launch it on Windows, at least you will need to change input redirect commands.
+
+
 ###Usage
 
-Example usage:
+* configure email server
+* prepare input data
+* write a template
+* test rendering
+* send emails
 
-    ./sendmail.py -y "Put email subject here" < test.csv
+### Configure email server
 
-To do a dry run, run without `-y` key:
+Open `settings.py`. Set `smtp_server`, `use_tls`, `use_ssl`, `username` and `password`. If you have ready template, you can adjust `template_path` or `template` as well.
 
-    ./sendmail.py "Put email subject here" < test.csv
-    
-It will output generated emails to console so you can check them. If it is a long list, probably passing it to `less` would be a good idea:
 
-    ./sendmail.py "Put email subject here" < test.csv | less
+###Prepare input data
 
-###Input data
-
-Script accepts CSV file on standard input. First line of CSV is treated as column name. Column email should contain email address of recipient. Other columns will be used for template formatting. Example of CSV content:
+Script accepts CSV content from standard input. First line of CSV is treated as column names. Column *email* should present and will be used a recipient address. Other columns will be used for template rendering. Example of CSV content:
 
     name,date,balance,email
     John Doe,12/31/2015,0.23,johndoe@email.com
     ...
-    
-Besides CSV, you also need to pass email subject as first parameter to the script.
 
-    ./sendmail.py "EMAIL SUBJECT HERE" < test.csv
+**Note**: This script works with CSV files, which means *comma* separated values. MS Office uses semicolon (;) separator by default. If you use MSO, change separator to comma when saving the CSV.
 
+###Write a template
 
-###Template formatting
-
-File `template.txt` contains email body template. In curly braces you can put variables corresponding to columns in your CSV. Example of template for rendering the CSV above:
+File `template.txt` contains email body template. Put variables corresponding to your CSV columns in curly braces. Example of template for rendering the CSV above:
 
     Dear {name},
     
@@ -41,6 +40,46 @@ File `template.txt` contains email body template. In curly braces you can put va
     
     Sincerely,
     your support team X.
+
+###Test rendering
+
+To do a dry run, run without `-y` key:
+
+    ./sendmail.py "Put email subject here" < test.csv
+
+You will get something like:
+
+    Content-Type: text/plain; charset="us-ascii"
+    MIME-Version: 1.0
+    Content-Transfer-Encoding: 7bit
+    Subject: Put email subject here
+    from: 
+    To: johndoe@email.com
+    
+    Dear John Doe,
+    
+    We would like to inform you that as of 12/31/2015 your account
+    balance is $0.23.
+    
+    Sincerely,
+    your support team X.
+    
+    ================================================================================
+    This is an example of emails that would be sent.
+    If you want to really send them, add -y to the command.
+    ================================================================================
+
+**Note**: As you might have a long list of recipients, it makes sense to test output on a small subset of them. You can also use pass result to `more`, `less`, `head` or `tail`:
+
+    ./sendmail.py "Put email subject here" < test.csv | tail
+
+###Send emails
+
+Finally, when you have everything in place, add `-y` to the command:
+Example usage:
+
+    ./sendmail.py -y "Put email subject here" < test.csv
+
     
 ###License
 
