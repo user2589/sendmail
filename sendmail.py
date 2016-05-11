@@ -7,8 +7,11 @@ Mass email to list supplied in CSV
 This is a console script using Django mail utilities
 """
 
+from __future__ import print_function
+
 import smtplib
 import os
+import logging
 
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -26,6 +29,7 @@ class Sender(object):
     sender = None
     connection = None
     debug = False
+    logger = None
 
     def __init__(self, smtp_host, username, password, use_tls=False,
                  use_ssl=False, sender_email=None, debug=False):
@@ -47,6 +51,8 @@ class Sender(object):
 
         self.debug = debug
         self.sender = sender_email
+        self.logger = logging.getLogger('SMTPSender')
+
     def send_mail(self, subj, body, recipients, charset='utf-8', files=None):
         """ A shortcut to send multipart/plaintext message """
         msg_body = MIMEText(body, _charset=charset)
@@ -76,9 +82,10 @@ class Sender(object):
         msg['Subject'] = subj
         msg['from'] = self.sender
         msg['To'] = ", ".join(recipients)
-        if self.debug:
-            print msg.as_string()
-        else:
+
+        self.logger.debug(msg.as_string())
+
+        if not self.debug:
             self.connection.sendmail(self.sender, recipients, msg.as_string())
 
 
@@ -95,7 +102,7 @@ if __name__ == '__main__':
                     "column names. Field named email will be used as address, "
                     "all other fields will be used as template variables.")
 
-    parser.add_argument('subject', type=str, nargs='?',
+    parser.add_argument('-s', '--subject', type=str,
                         help='email subject', default='')
     parser.add_argument('-a', '--attach', help='attachment',
                         action='append', default=[])
@@ -108,13 +115,16 @@ if __name__ == '__main__':
     reader = csv.DictReader(sys.stdin)
 
     if 'email' not in reader.fieldnames:
-        parser.exit(1, "Input CSV is expected to have a column named 'email\n\n'")
+        parser.exit(1,
+                    "Input CSV is expected to have a column named 'email\n\n'")
 
     if not args.subject and 'subject' not in reader.fieldnames:
         parser.exit(1, "You need to specify subject in the command line or "
                        "add a 'subject' column into the input CSV file\n\n")
 
     debug = not args.yes
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
     sender = Sender(settings.smtp_server, settings.username, settings.password,
                     settings.use_tls, settings.use_ssl, debug=debug)
 
@@ -124,6 +134,7 @@ if __name__ == '__main__':
         return [l for l in [f.strip() for f in flist.split("\n") if f] if l]
 
     for record in reader:
+        # CLI parameters have priority over CSV values
         subject = args.subject or record['subject']
         body = settings.template.format(**record)
         files = args.attach + clean_files(record.get('attachment'))
