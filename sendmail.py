@@ -12,6 +12,9 @@ from email.mime.text import MIMEText
 
 
 class Sender(object):
+    """ Class to represent SMTP sender. The main purpose of this class is to
+        reuse SMTP connection when sending multiple emails
+    """
     sender = None
     connection = None
     debug = False
@@ -61,8 +64,8 @@ if __name__ == '__main__':
                     "column names. Field named email will be used as address, "
                     "all other fields will be used as template variables.")
 
-    parser.add_argument('subject', type=str,
-                        help='email subject')
+    parser.add_argument('subject', type=str, nargs='?',
+                        help='email subject', default='')
     parser.add_argument('-y', '--yes', action='store_true',
                         help="whether to really send emails (set to 0) or just "
                              "output dry run to console")
@@ -72,15 +75,20 @@ if __name__ == '__main__':
     reader = csv.DictReader(sys.stdin)
 
     if 'email' not in reader.fieldnames:
-        parser.exit(1, "Input CSV is expected to have a column named 'email'")
+        parser.exit(1, "Input CSV is expected to have a column named 'email\n\n'")
+
+    if not args.subject and 'subject' not in reader.fieldnames:
+        parser.exit(1, "You need to specify subject in the command line or "
+                       "add a 'subject' column into the input CSV file\n\n")
 
     debug = not args.yes
     sender = Sender(settings.smtp_server, settings.username, settings.password,
                     settings.use_tls, settings.use_ssl, debug=debug)
 
     for record in reader:
+        subject = args.subject or record['subject']
         body = settings.template.format(**record)
-        sender.send_mail(args.subject, body, [record['email']])
+        sender.send_mail(subject, body, [record['email']])
 
     if debug:
         print "="*80
