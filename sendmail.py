@@ -8,7 +8,15 @@ This is a console script using Django mail utilities
 """
 
 import smtplib
+import os
+
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+# default charset, select from the list email.charset.CHARSETS
+DEFAULT_CHARSET = 'utf-8'
+MAX_ATTACHMENT_SIZE = 16777216
 
 
 class Sender(object):
@@ -39,9 +47,32 @@ class Sender(object):
 
         self.debug = debug
         self.sender = sender_email
+    def send_mail(self, subj, body, recipients, charset='utf-8', files=None):
+        """ A shortcut to send multipart/plaintext message """
+        msg_body = MIMEText(body, _charset=charset)
+        if not files:
+            msg = msg_body
+        else:
+            msg = MIMEMultipart()
+            msg.attach(msg_body)
+            for filename in files:
+                try:
+                    if os.path.getsize(filename) > MAX_ATTACHMENT_SIZE:
+                        self.logger.error(
+                            "Attachment size is over 10Mb: %s", filename)
+                        continue
+                    fh = open(filename, 'rb')
+                    content = fh.read()
+                except IOError:
+                    self.logger.error(
+                        "Can't read the attachment content: %s", filename)
+                    return 1
+                basename = os.path.basename(filename)
+                part = MIMEApplication(
+                    content, Name=basename,
+                    Content_Disposition='attachment; filename=%s'.format(basename))
+                msg.attach(part)
 
-    def send_mail(self, subj, body, recipients):
-        msg = MIMEText(body)
         msg['Subject'] = subj
         msg['from'] = self.sender
         msg['To'] = ", ".join(recipients)
@@ -66,6 +97,8 @@ if __name__ == '__main__':
 
     parser.add_argument('subject', type=str, nargs='?',
                         help='email subject', default='')
+    parser.add_argument('-a', '--attach', help='attachment',
+                        action='append', default=[])
     parser.add_argument('-y', '--yes', action='store_true',
                         help="whether to really send emails (set to 0) or just "
                              "output dry run to console")
@@ -85,13 +118,19 @@ if __name__ == '__main__':
     sender = Sender(settings.smtp_server, settings.username, settings.password,
                     settings.use_tls, settings.use_ssl, debug=debug)
 
+    def clean_files(flist):
+        if not flist:
+            return []
+        return [l for l in [f.strip() for f in flist.split("\n") if f] if l]
+
     for record in reader:
         subject = args.subject or record['subject']
         body = settings.template.format(**record)
-        sender.send_mail(subject, body, [record['email']])
+        files = args.attach + clean_files(record.get('attachment'))
+        # paths separated by newlines
+        sender.send_mail(subject, body, [record['email']], files=files)
 
     if debug:
-        print "="*80
-        print "This is an example of emails that would be sent."
-        print "If you want to really send them, add -y to the command."
-        print "="*80
+        print (
+            "="*80, "\nThis is an example of emails that would be sent.\n"
+            "If you want to really send them, add -y to the command.\n\n")
